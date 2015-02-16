@@ -1,17 +1,11 @@
-from distutils.command.config import config
-from utils import get_points_from_img
-from SC import SC
 import time
-import sys
-import itertools
-from math import sin, cos, sqrt, pi
-import math
 import numpy as np
 import cv2
-import cv
+
+from SC import SC
 
 
-def get_points_from_b_and_w_img(bw_img, sample_size, low_th=50, high_th=200):
+def sample_contours_from_binary_img(bw_img, sample_size, low_th=50, high_th=200):
 
     """
     :param bw_img: (ndarray) Image to get contour sample from
@@ -21,23 +15,31 @@ def get_points_from_b_and_w_img(bw_img, sample_size, low_th=50, high_th=200):
     contour_img = cv2.Canny(bw_img, low_th, high_th)
     contours, dont_care = cv2.findContours(contour_img, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE)
 
-    contour_size = 0
+    contours_samples = []
+
     for contour in contours:
-        contour_size += len(contour)
+        contour_samples = []
+        marker_step = max((float)(len(contour)) / (float)(sample_size), 1)
+        contour_marker = 0
+        contour_idx = 0
+        while (contour_idx < len(contour)):
+            contour_samples.append(contour[contour_idx][0])
+            contour_marker += marker_step
+            contour_idx = round(contour_marker)
+        contours_samples.append(contour_samples)
 
-    sample_points = []
-    sample_ratio = (float)(contour_size) / (float)(sample_size)
-
+    '''
     contour_marker = 0
     for contour in contours:
         while 1:
             if (round(contour_marker) >= len(contour)):
                 break
-            sample_points.append(contour[round(contour_marker)][0])
-            contour_marker += max(sample_ratio, 1)
+            contour_samples.append(contour[round(contour_marker)][0])
+            contour_marker += max(marker_step, 1)
         contour_marker -= len(contour)
+    '''
 
-    return sample_points
+    return contours_samples
 
 
 if __name__ == '__main__':
@@ -87,15 +89,29 @@ if __name__ == '__main__':
         contour_test[point] = pts_test[point]
     '''
 
-    pts = get_points_from_b_and_w_img(src[:, :, 1], 100)
-    pts_test = get_points_from_b_and_w_img(src_test[:, :, 1], 100)
+    pts = sample_contours_from_binary_img(src[:, :, 1], 100)
+    pts_test = sample_contours_from_binary_img(src_test[:, :, 1], 100)
 
+    #debug
+    test_contours_img = np.zeros(src_test.shape)
+    src_contours_img = np.zeros(src.shape)
+    pts_ndarr = np.asarray(pts)
+    pts_test_ndarr = np.asarray(pts_test)
+    cv2.drawContours(src_contours_img, pts_ndarr, -1, (255, 255, 255))
+    cv2.drawContours(test_contours_img, pts_test_ndarr, -1, (255, 255, 255))
+
+    cv2.imshow("contours_test", test_contours_img)
+    cv2.imshow("contours", src_contours_img)
+    cv2.waitKey(0)
+
+    '''
     f = open("test.txt", "w")
     f.write(repr(pts))
     f.write('\n')
     f.write(repr(pts_test))
     f.close()
-    cv2.imshow('green2', src[:, :, 1])
+    '''
+    #end debug
 
     sc = SC()
     P = sc.compute(pts)
