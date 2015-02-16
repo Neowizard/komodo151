@@ -1,6 +1,9 @@
+from distutils.command.config import config
 from utils import get_points_from_img
 from SC import SC
 import time
+import sys
+import itertools
 from math import sin, cos, sqrt, pi
 import math
 import numpy as np
@@ -8,44 +11,33 @@ import cv2
 import cv
 
 
-def get_points_from_b_and_w_img(bw_img, sampleto, low_th=50, high_th=200):
+def get_points_from_b_and_w_img(bw_img, sample_size, low_th=50, high_th=200):
 
     """
     :param bw_img: (ndarray) Image to get contour sample from
-    :param sampleto: (int) Number of samples
+    :param sample_size: (int) Number of samples
     :return: (array) A 2D array of coordinates (x,y) sampled from the contour
     """
-    points = []
-    if (bw_img[0,0] < low_th):
-        state = 0
-    else:
-        state = 1
-    for x in xrange(0, bw_img.shape[0]):
-        for y in xrange(0, bw_img.shape[1]):
-            c = bw_img.item((x, y))
-            if ((state == 0) & (c >= high_th)) |\
-                    ((state ==1) & (c <= low_th)):
-                state = 1 - state
-                points.append((x, y))
-                print "(", x, ", ", y,")"
+    contour_img = cv2.Canny(bw_img, low_th, high_th)
+    contours, dont_care = cv2.findContours(contour_img, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE)
 
-    r = 2
-    w, h = bw_img.shape
-    while len(points) > sampleto:
-        newpoints = points
-        xr = xrange(0,w,r)
-        yr = xrange(0,h,r)
-        for p in points:
-            if p[0] not in xr and p[1] not in yr:
-                newpoints.remove(p)
-                if len(points) <= sampleto:
-                    return points
-        r += 1
-    '''T = np.zeros((sampleto,1))
-    for i,(x,y) in enumerate(points):
-        T[i] = math.atan2(py[y,x],px[y,x])+pi/2;
-    '''
-    return points #,np.asmatrix(T)
+    contour_size = 0
+    for contour in contours:
+        contour_size += len(contour)
+
+    sample_points = []
+    sample_ratio = (float)(contour_size) / (float)(sample_size)
+
+    contour_marker = 0
+    for contour in contours:
+        while 1:
+            if (round(contour_marker) >= len(contour)):
+                break
+            sample_points.append(contour[round(contour_marker)][0])
+            contour_marker += max(sample_ratio, 1)
+        contour_marker -= len(contour)
+
+    return sample_points
 
 
 if __name__ == '__main__':
@@ -95,9 +87,14 @@ if __name__ == '__main__':
         contour_test[point] = pts_test[point]
     '''
 
-    pts = get_points_from_b_and_w_img(src[:, :, 1], 150)
-    pts_test = get_points_from_b_and_w_img(src_test[:, :, 1], 150)
+    pts = get_points_from_b_and_w_img(src[:, :, 1], 100)
+    pts_test = get_points_from_b_and_w_img(src_test[:, :, 1], 100)
 
+    f = open("test.txt", "w")
+    f.write(repr(pts))
+    f.write('\n')
+    f.write(repr(pts_test))
+    f.close()
     cv2.imshow('green2', src[:, :, 1])
 
     sc = SC()
@@ -108,7 +105,6 @@ if __name__ == '__main__':
     print "Cost = ", COST
 
     end = time.time()
-
 
     print "time:", end - start
     #Q = sc.compute(points2)
