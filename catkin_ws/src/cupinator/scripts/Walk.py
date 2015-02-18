@@ -100,5 +100,6 @@ if __name__ == '__main__':
         rospy.init_node('Walk', anonymous=True)
         rospy.Subscriber('/komodo_1/scan', LaserScan, checkCollision)
         rospy.Subscriber('/cupinator/walk/command', WalkCommand, walkUntilCollision)
+	rospy.spin()
     except rospy.ROSInterruptException:
         pass
