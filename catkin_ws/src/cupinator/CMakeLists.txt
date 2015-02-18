@@ -47,6 +47,9 @@ find_package(catkin REQUIRED COMPONENTS
 add_message_files(
    FILES
    CtrlCommand.msg
+   CtrlStatus.msg
+   RoomScannerCommand.msg
+   RoomScannerResult.msg
 )
 
 ## Generate services in the 'srv' folder
