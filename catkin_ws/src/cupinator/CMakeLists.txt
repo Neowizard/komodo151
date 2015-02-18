@@ -50,6 +50,8 @@ add_message_files(
    CtrlStatus.msg
    RoomScannerCommand.msg
    RoomScannerResult.msg
+   WalkCommand.msg
+   WalkResult.msg
 )
 
 ## Generate services in the 'srv' folder
