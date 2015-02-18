@@ -1,0 +1,23 @@
+<?xml version="1.0"?>
+<package>
+  <name>ric</name>
+  <version>1.0.0</version>
+  <description>ric meta-package</description>
+  <url>http://www.ros.org/wiki/ric</url>
+  <maintainer email="support@robotican.net">RoboTiCan</maintainer>
+  <author email="support@robotican.net">RoboTiCan</author>
+  <license>BSD</license>
+
+
+  <buildtool_depend>catkin</buildtool_depend>
+  
+  <run_depend>ric_robot</run_depend>
+  <run_depend>ric_base_station</run_depend>
+  <run_depend>ric_description</run_depend>
+  <run_depend>ric_mc</run_depend>
+  <run_depend>pcloud_rot</run_depend>
+  <export>
+  	<metapackage/>
+  </export>
+  
+</package>
