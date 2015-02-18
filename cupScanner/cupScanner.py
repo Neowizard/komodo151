@@ -1,3 +1,4 @@
+import sys
 import time
 import numpy as np
 import cv2
@@ -9,7 +10,7 @@ def sample_contours_from_binary_img(bw_img, sample_size, low_th=50, high_th=200)
 
     """
     :param bw_img: (ndarray) Image to get contour sample from
-    :param sample_size: (int) Number of samples
+    :param sample_size: (int) Maximal number of samples
     :return: (array) A 2D array of coordinates (x,y) sampled from the contour
     """
     contour_img = cv2.Canny(bw_img, low_th, high_th)
@@ -18,14 +19,23 @@ def sample_contours_from_binary_img(bw_img, sample_size, low_th=50, high_th=200)
     contours_samples = []
 
     for contour in contours:
-        contour_samples = []
+        contour_samples_count = min(len(contour), sample_size)
+        contour_samples_count = sample_size
+        contour_samples = np.ndarray((contour_samples_count, 1, 2), contours[0].dtype)
+
         marker_step = max((float)(len(contour)) / (float)(sample_size), 1)
         contour_marker = 0
         contour_idx = 0
-        while (contour_idx < len(contour)):
-            contour_samples.append(contour[contour_idx][0])
+        for sample_idx in xrange(0, contour_samples_count):
+            if (contour_idx >= len(contour)):
+                #break
+                contour_marker = 0
+                contour_idx = 0
+            contour_samples[sample_idx, :, :] = contour[contour_idx].copy()
+
             contour_marker += marker_step
             contour_idx = round(contour_marker)
+
         contours_samples.append(contour_samples)
 
     '''
@@ -43,8 +53,6 @@ def sample_contours_from_binary_img(bw_img, sample_size, low_th=50, high_th=200)
 
 
 if __name__ == '__main__':
-
-    samples = 100
 
     src = cv2.imread('green1.jpg')
 
@@ -89,41 +97,50 @@ if __name__ == '__main__':
         contour_test[point] = pts_test[point]
     '''
 
-    pts = sample_contours_from_binary_img(src[:, :, 1], 100)
-    pts_test = sample_contours_from_binary_img(src_test[:, :, 1], 100)
+    input_samples = sample_contours_from_binary_img(src[:, :, 1], 100)
+    test_contour_samples = sample_contours_from_binary_img(src_test[:, :, 1], 100)
 
+    '''
     #debug
+
     test_contours_img = np.zeros(src_test.shape)
     src_contours_img = np.zeros(src.shape)
-    pts_ndarr = np.asarray(pts)
-    pts_test_ndarr = np.asarray(pts_test)
-    cv2.drawContours(src_contours_img, pts_ndarr, -1, (255, 255, 255))
-    cv2.drawContours(test_contours_img, pts_test_ndarr, -1, (255, 255, 255))
+
+    cv2.drawContours(src_contours_img, contour_samples, -1, (255, 255, 255))
+    cv2.drawContours(test_contours_img, test_contour_samples, -1, (255, 255, 255))
 
     cv2.imshow("contours_test", test_contours_img)
     cv2.imshow("contours", src_contours_img)
     cv2.waitKey(0)
 
-    '''
-    f = open("test.txt", "w")
-    f.write(repr(pts))
-    f.write('\n')
-    f.write(repr(pts_test))
-    f.close()
-    '''
     #end debug
+    '''
 
     sc = SC()
-    P = sc.compute(pts)
-    Q = sc.compute(pts_test)
-    COST, indexes = sc.diff(Q, P)
+    test_contour_SC = sc.compute(test_contour_samples[0][:, 0, :])
 
-    print "Cost = ", COST
+    input_contours_SC = []
+    min_cost = sys.maxint
+    min_cost_contour = input_samples[0]
+    for input_contour_samples in input_samples:
+        contour_SC = sc.compute(input_contour_samples[:, 0, :])
+        contour_cost, indices = sc.diff(test_contour_SC, contour_SC)
+        input_contours_SC.append((contour_SC, contour_cost))
+        print "Cost = ", contour_cost
 
+        if (contour_cost < min_cost):
+            min_cost = contour_cost
+            min_cost_contour = input_contour_samples
+
+    print "Min Cost = ", min_cost
+
+    min_cost_contour_img = np.zeros(src.shape)
+    cv2.drawContours(min_cost_contour_img, min_cost_contour, -1, (255, 255, 255))
     end = time.time()
 
     print "time:", end - start
-    #Q = sc.compute(points2)
+
+    cv2.imshow("min_cost contour", min_cost_contour_img)
     cv2.waitKey(0)
 
     #print "cost:", COST
