@@ -1,0 +1,6 @@
+# What we want the ctrl to return.
+# one of 'status', 'distance' (to cup)
+string queryType
+---
+string status
+int64 range
