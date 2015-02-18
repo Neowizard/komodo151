@@ -1,6 +1,0 @@
-/media/sf_ubuntu_ros/robotics_lab/catkin_ws/build/CMakeFiles/clean_test_results.dir
-/media/sf_ubuntu_ros/robotics_lab/catkin_ws/build/CMakeFiles/doxygen.dir
-/media/sf_ubuntu_ros/robotics_lab/catkin_ws/build/gtest/CMakeFiles/gtest.dir
-/media/sf_ubuntu_ros/robotics_lab/catkin_ws/build/gtest/CMakeFiles/gtest_main.dir
-/media/sf_ubuntu_ros/robotics_lab/catkin_ws/build/CMakeFiles/run_tests.dir
-/media/sf_ubuntu_ros/robotics_lab/catkin_ws/build/CMakeFiles/tests.dir
