@@ -1,0 +1,28 @@
+<!-- -*- mode: XML -*- -->
+<launch>
+  
+  <arg name="x" default="0.0"/>
+  <arg name="y" default="0.0"/>
+  <arg name="z" default="0.1"/>
+  <arg name="R" default="0.0" />
+  <arg name="P" default="0.0" />
+  <arg name="Y" default="0.0" />
+  <arg name="id" default="1"/>
+  <arg name="first" default="0"/>
+
+ <param name="tf_prefix" value="komodo_$(arg id)" />
+
+ <!-- Load the URDF into the ROS Parameter Server -->
+ <param name="robot_description" command="$(find xacro)/xacro.py '$(find ric_description)/komodo/komodo.xacro' komodo_id:=$(arg id)" />
+
+<group unless="$(arg first)">
+  <!-- Run a python script to the send a service call to gazebo_ros to spawn a URDF robot -->
+  <node name="urdf_spawner_$(arg id)" pkg="gazebo_ros" type="spawn_model" respawn="false" output="screen"
+	args="-urdf -model komodo_$(arg id) -param robot_description -x $(arg x) -y $(arg y) -z $(arg z) -R $(arg R) -P $(arg P) -Y $(arg Y)"/>
+</group>
+
+ <node name="pcloud_rot_node" pkg="pcloud_rot" type="pcloud_rot_node" cwd="node" output="screen" args="$(arg id)" />
+
+ <node pkg="tf" type="static_transform_publisher" name="komodo_broadcaster_$(arg id)" args="0 0 0 0 0 0 /map /komodo_$(arg id)/odom_$(arg id) 100" />
+
+</launch>
