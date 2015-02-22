@@ -6,7 +6,7 @@ from cupinator.msg import *
 Main control node for the Cupinator. Talks to the user via a topic, and maintains a state machine.
 
 States:
-    IDLE, ROOM_SCAN, MOVING_TO_CUP, AT_CUP, NO_CUP
+    IDLE, ROOM_SCAN, APPROACHING_CUP, AT_CUP, NO_CUP
 
 State Machine:
 search
@@ -24,6 +24,10 @@ global room_scanner_publisher
 status_publisher = None
 current_state = None
 room_scanner_publisher = None
+
+# Cost above which we conclude there's no cup.
+# TODO move to parameter server?
+COST_THRESHOLD = 1000
 
 
 def change_state(new_state):
@@ -55,13 +59,21 @@ def start_scan():
 
 def scan_callback(room_scanner_result):
     rospy.loginfo("Got scanner result: %s" % repr(room_scanner_result))
-    change_state("IDLE")
-# TODO continue here - decide whether to go to the best place of not.
+    if room_scanner_result.cost > COST_THRESHOLD:
+        change_state("IDLE")
+    else:
+        start_approach()
+
+
+def start_approach():
+    change_state("APPROACHING_CUP")
+# TODO continue here - tell the walker to go in the direction of room_scanner_result.angle
 
 
 def stop():
     change_state("IDLE")
 # TODO send stop message to the proper node, if any.
+
 
 def command_callback(command_msg):
     command = command_msg.command
