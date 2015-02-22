@@ -61,7 +61,7 @@ def start_approach(room_scanner_result):
     else:
         change_state("ARRIVING_AT_CUP")
 
-    walk_publisher.publish(WalkCommand(angle, distance))
+    walk_publisher.publish(WalkCommand(None, angle, distance))
 
 
 def start_bearing_readjustment():
@@ -150,7 +150,8 @@ def change_state(new_state):
     """
     global current_state
     current_state = new_state
-    status_publisher.publish(CtrlStatus(None, "state_change", new_state))
+    rospy.loginfo("current state: %s" % current_state)
+    status_publisher.publish(CtrlStatus(None, "state_change", current_state))
 
 
 def publish_error(message):

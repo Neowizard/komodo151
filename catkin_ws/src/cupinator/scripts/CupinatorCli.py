@@ -86,6 +86,8 @@ if __name__ == '__main__':
         cmd = raw_input("cupinator> ")
         if cmd in command_dict:
             command_dict[cmd]()
+        elif cmd.strip() == "":
+            pass  # ignore
         else:
             print "/!\ unknown command '%s'" % cmd
 
