@@ -1,0 +1,6 @@
+<launch>
+    <group ns="sim">
+        <node pkg="cupinatorsim" name="walk" type="WalkerSim.py" />
+        <node pkg="cupinatorsim" name="scan" type="RoomScannerSim.py" />
+    </group>
+</launch>
