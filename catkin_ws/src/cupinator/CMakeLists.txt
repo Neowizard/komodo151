@@ -7,7 +7,9 @@ project(cupinator)
 find_package(catkin REQUIRED COMPONENTS
   rospy
   std_msgs
+  sensor_msgs
   message_generation
+  cv_bridge
 )
 
 ## System dependencies are found with CMake's conventions
@@ -52,6 +54,7 @@ add_message_files(
    RoomScannerResult.msg
    WalkCommand.msg
    WalkResult.msg
+   SnapshotData.msg
 )
 
 ## Generate services in the 'srv' folder
@@ -71,6 +74,7 @@ add_service_files(
 generate_messages(
   DEPENDENCIES
   std_msgs
+  sensor_msgs
 )
 
 ###################################
