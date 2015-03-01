@@ -96,9 +96,7 @@ class SC(object):
                     sn[r_array_q[i, j] - 1, theta_array_q[i, j] - 1] += 1
             BH[i] = sn.reshape(self.nbins)
             
-        print 'PROFILE TOTAL COST: ' + str(time.time()-t)     
-            
-        return BH        
+        return BH
         
         
     def _cost(self,hi,hj):
