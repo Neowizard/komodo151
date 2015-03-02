@@ -6,7 +6,7 @@ import time
 import numpy as np
 import cv2
 import os
-
+from threading import Lock
 import cv_bridge
 from cupinator.msg import SnapshotData
 import cupRec.SC
@@ -27,6 +27,7 @@ class ShapeContextCupRec:
     secondary_factor = 0
     sample_size = 0
 
+    lock = Lock()
     shapecontext_DB = []
     contour_heap = []
 
@@ -35,9 +36,10 @@ class ShapeContextCupRec:
         start_time = time.time()
         #end debug
         #TODO: Store computed SC on disk to reduce startup time
-        for DB_file in os.listdir("./cupRec/DB"):
+        DB_path = os.path.join(os.path.dirname(__file__), "cupRec/DB/")
+        for DB_file in os.listdir(DB_path):
             if DB_file.endswith(".jpg") | DB_file.endswith(".png") | DB_file.endswith(".bmp"):
-                DB_img = cv2.imread("./cupRec/DB/%s" % DB_file)
+                DB_img = cv2.imread(DB_path + DB_file)
                 shapecontexts = self.compute_shapecontext(DB_img)
                 for (img_contour, contour_SC) in shapecontexts:
                     self.shapecontext_DB.append((img_contour, contour_SC))
@@ -158,6 +160,8 @@ class ShapeContextCupRec:
             the DB. Push the contour into a min-heap according to the difference between
             the contour and its best match from the DB. '''
         sc = cupRec.SC.SC()
+
+        contour_list = []
         for (contour, contour_SC) in contours_SC:
 
             match_cost = sys.maxint
@@ -182,7 +186,14 @@ class ShapeContextCupRec:
             #end debug
 
             ''' All DB contours iterated, push contour onto heap by best match '''
-            heapq.heappush(self.contour_heap, (match_cost, contour, match_DB_contour))
+            contour_list.append((match_cost, contour, match_DB_contour))
+
+        self.lock.acquire()
+
+        for (cost, contour, DB_contour) in contour_list:
+            heapq.heappush(self.contour_heap, (cost, contour, DB_contour))
+
+        self.lock.release()
 
         if __debug__:
             end = time.time()
@@ -195,7 +206,7 @@ class ShapeContextCupRec:
 
 if __name__ == '__main__':
     try:
-        rospy.init_node('CupRec', anonymous=False, log_level=rospy.DEBUG)
+        rospy.init_node("CupRec", anonymous=False, log_level=rospy.DEBUG)
         rospy.loginfo("Loading DB")
         cupRecognizer = ShapeContextCupRec()
         rospy.loginfo("Initializing node")

@@ -55,12 +55,14 @@ add_message_files(
    WalkCommand.msg
    WalkResult.msg
    SnapshotData.msg
+   Contour.msg
 )
 
 ## Generate services in the 'srv' folder
 add_service_files(
   FILES
   CtrlQuery.srv
+  SingleCupRecQuery.srv
 )
 
 ## Generate actions in the 'action' folder
