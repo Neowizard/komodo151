@@ -1,5 +1,7 @@
 #!/usr/bin/env python
 import rospy
+import math
+import tf
 from sensor_msgs.msg import LaserScan
 from geometry_msgs.msg import Twist
 from nav_msgs.msg import Odometry
@@ -14,16 +16,20 @@ angularDistance = 0
 PI = 3.14
 angleSample = 180
 minDistance = 0.25
+beginPoint = None
 
 def checkCollision(laserData):
     global collisionAlert
     global angleSample
     global minDistance
 
-    startPoint = (180*512)/(laserData.angle_max - laserData.angle_min)
-    endPoint = laserData.angle_max-startPoint-1
+    #startPoint = (180*512)/(laserData.angle_max - laserData.angle_min)
+    #endPoint = laserData.angle_max-startPoint-1
+	# We dont have do compute this because angle_max ~ pi/2 and angle_min ~ -pi/2
 
-    for i in range(startPoint,endPoint):
+    #START AT 25 END AT 512-26 (TOTAL OF 512 points) - this will give us 160 degrees
+    i=25
+    while (i<486):
         if laserData.ranges[i]<=minDistance:
             collisionAlert = True
             break
@@ -34,15 +40,29 @@ def checkDistanceTraveled(odom):
     global angularDistanceAlert
     global linearDistance
     global angularDistance
-    # TODO: TRAVELED
-    linearTraveled = odom.getTotalLinearTraveled()
+    global beginPoint
+
+    #SET VALUE TO BEGIN POINT
+    if (beginPoint is None):
+        beginPoint = odom
+    #
+
+
+    # COMPUTE LINEAR DISTANCE
+    linearTraveled = math.sqrt(math.pow((beginPoint.pose.position.x - odom.pose.position.x),2) + math.pow((beginPoint.pose.position.y - odom.pose.position.y
+    ),2))
+    #
     if linearTraveled >= linearDistance:
         linearDistanceAlert = True
 
-    angularTraveled = odom.getTotalAngularTraveled()
+    #COMPUTE ANGULAR DISTANCE
+
+
+    angularTraveled = tf.
+    #
+
     if angularTraveled > angularDistance:
         angularDistanceAlert = True
-
 
 
 def walkUntilCollision(cmd):
