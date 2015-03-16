@@ -1,0 +1,6 @@
+bool flush # Should the cupRecognizer flush it's internal aggregated data
+---
+int16 point_count
+int32[] x_coords
+int32[] y_coords
+float64 match_cost # cost of matching match_contour to the DB
