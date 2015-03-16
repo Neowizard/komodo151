@@ -15,7 +15,7 @@ linearDistance = 0
 angularDistance = 0
 PI = 3.14
 angleSample = 180
-minDistance = 0.25
+minDistance = 0.6
 beginPoint = None
 
 def checkCollision(laserData):
@@ -30,9 +30,10 @@ def checkCollision(laserData):
     #START AT 25 END AT 512-26 (TOTAL OF 512 points) - this will give us 160 degrees
     i=25
     while (i<486):
-        if laserData.ranges[i]<=minDistance:
+        if (laserData.ranges[i]<=minDistance and not math.isnan(laserData.ranges[i])):
             collisionAlert = True
             break
+        i=i+1
 
 
 def checkDistanceTraveled(odom):
@@ -44,24 +45,31 @@ def checkDistanceTraveled(odom):
 
     #SET VALUE TO BEGIN POINT
     if (beginPoint is None):
-        beginPoint = odom
+        beginPoint = odom.pose
     #
 
 
     # COMPUTE LINEAR DISTANCE
-    linearTraveled = math.sqrt(math.pow((beginPoint.pose.position.x - odom.pose.position.x),2) + math.pow((beginPoint.pose.position.y - odom.pose.position.y
+    linearTraveled = math.sqrt(math.pow((beginPoint.pose.position.x - odom.pose.pose.position.x),2) + math.pow((beginPoint.pose.position.y - odom.pose.pose.position.y
     ),2))
     #
     if linearTraveled >= linearDistance:
         linearDistanceAlert = True
 
     #COMPUTE ANGULAR DISTANCE
+    Q1 = (beginPoint.pose.orientation.x, beginPoint.pose.orientation.y, beginPoint.pose.orientation.z, beginPoint.pose.orientation.w)
+    Q2 = (odom.pose.pose.orientation.x, odom.pose.pose.orientation.y, odom.pose.pose.orientation.z, odom.pose.pose.orientation.w)
 
+    E1 = tf.transformations.euler_from_quaternion(Q1)
+    E2 = tf.transformations.euler_from_quaternion(Q2)
 
-    angularTraveled = tf.
+    Y1 = E1[2]
+    Y2 = E2[2]
+
+    angularTraveled = Y1-Y2
     #
 
-    if angularTraveled > angularDistance:
+    if angularTraveled <= -angularDistance:
         angularDistanceAlert = True
 
 
@@ -74,6 +82,9 @@ def walkUntilCollision(cmd):
     global PI
 
     linearDistance = cmd.distance
+    angularDistance = cmd.angle
+
+    #rospy.loginfo("")
 
     walkPub = rospy.Publisher('/komodo_1/cmd_vel', Twist, queue_size=10)
 
@@ -82,7 +93,7 @@ def walkUntilCollision(cmd):
     rate = rospy.Rate(10)
     walkTwist = Twist()
     while not (angularDistanceAlert or collisionAlert):
-        walkTwist.angular.z = 0.3*PI
+        walkTwist.angular.z = 0.35*PI
         walkPub.publish(walkTwist)
         rate.sleep()
 
@@ -90,7 +101,7 @@ def walkUntilCollision(cmd):
     walkPub.publish(walkTwist)
 
     while not (linearDistanceAlert or collisionAlert):
-        walkTwist.linear = 0.5
+        walkTwist.linear.x = 0.5
         walkPub.publish(walkTwist)
         rate.sleep()
 
@@ -101,11 +112,11 @@ def walkUntilCollision(cmd):
     # ------------------------
 
     # RESTORE THE VALUES FOR THE GLOBAL VARIABLES
-    collisionAlert = False
-    linearDistanceAlert = False
-    angularDistanceAlert = False
-    linearDistance = 0
-    angularDistance = 0
+    #collisionAlert = False
+    #linearDistanceAlert = False
+    #angularDistanceAlert = False
+    #linearDistance = 0
+    #angularDistance = 0
     # -----------------
 
     # PUBLISH WALK RESULT

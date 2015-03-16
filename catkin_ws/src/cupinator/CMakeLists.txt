@@ -10,6 +10,7 @@ find_package(catkin REQUIRED COMPONENTS
   sensor_msgs
   message_generation
   cv_bridge
+  tf
 )
 
 ## System dependencies are found with CMake's conventions
@@ -55,7 +56,6 @@ add_message_files(
    WalkCommand.msg
    WalkResult.msg
    SnapshotData.msg
-   Contour.msg
 )
 
 ## Generate services in the 'srv' folder
