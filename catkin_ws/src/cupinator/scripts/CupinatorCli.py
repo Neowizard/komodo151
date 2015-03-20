@@ -46,11 +46,6 @@ def status():
     print "Last robot status:\n%s" % last_robot_state
 
 
-def show_help():
-    print "Type a command at the prompt."
-    print "Available commands are: scan, stop, status, help, quit"
-
-
 def stop_loop():
     global go
     print "Goodbye!"
@@ -61,13 +56,20 @@ def ctrl_status_update(message):
     global last_robot_state
     last_robot_state = "%s: %s" % (message.type, message.data)
 
+
+def print_help():
+    print "Available commands:"
+    for command in command_dict:
+        print "\t", command
+
 command_dict = {
     "scan": scan,
     "stop": stop,
     "status": status,
-    "help": show_help,
-    "quit": stop_loop
+    "help": print_help,
+    "quit": stop_loop,
 }
+
 
 if __name__ == '__main__':
     print art
@@ -89,7 +91,8 @@ if __name__ == '__main__':
         elif cmd.strip() == "":
             pass  # ignore
         else:
-            print "/!\ unknown command '%s'" % cmd
+            print "/!\ unknown command '%s'\n" % cmd
+            print_help()
 
         print
 

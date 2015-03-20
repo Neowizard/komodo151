@@ -1,13 +1,6 @@
 #!/usr/bin/env python
 import heapq
 import sys
-from std_msgs.msg import Int16
-from cupinator.srv import CupRecQueryRequest
-from cupinator.srv import CupRecQueryResponse
-from cupinator.srv import CupRecQuery
-from cupinator.srv import SingleCupRecQueryRequest
-from cupinator.srv import SingleCupRecQueryResponse
-from cupinator.srv import SingleCupRecQuery
 import rospy
 import time
 import numpy as np
@@ -38,25 +31,29 @@ class ShapeContextCupRec:
     upper_green = np.array([75, 255, 255])
 
     sample_size = 0
-    debug_level = 3
+    debug_level = 4
 
     lock = Lock()
     shapecontext_DB = []
     contour_heap = []
 
     def __init__(self, sample_size=100):
+        if (self.debug_level >= 1):
+            rospy_debug_level = rospy.DEBUG
+        else:
+            rospy_debug_level = None
         self.sample_size = sample_size
         self.load_shapecontext_DB()
 
     def load_shapecontext_DB(self):
-        fname = self.load_shapecontext_DB.__name__
+        fname = "{}::{}".format(self.__class__.__name__,  self.load_shapecontext_DB.__name__)
         rospy.loginfo("Loading DB")
         start_time = time.time()
 
         # TODO: Store computed SC on disk to reduce startup time
         DB_path = os.path.join(os.path.dirname(__file__), "cupRec/DB/")
         for DB_file in os.listdir(DB_path):
-            if DB_file.endswith(".jpg") | DB_file.endswith(".png") | DB_file.endswith(".bmp"):
+            if DB_file.lower().endswith(".jpg") | DB_file.lower().endswith(".png") | DB_file.lower().endswith(".bmp"):
                 rospy.loginfo("{}: Computing SC for {}".format(fname, DB_file))
                 DB_img = cv2.imread(DB_path + DB_file)
                 shapecontexts = self.compute_shapecontext(DB_img)
@@ -89,28 +86,37 @@ class ShapeContextCupRec:
         if (self.debug_level >= 2):
             cv2.imshow("canny_dialated", contour_img)
 
-        contours, dont_care = cv2.findContours(contour_img, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE)
+        contours, _ = cv2.findContours(contour_img, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE)
+        if (self.debug_level >= 4):
+            print "contours count = ", len(contours)
+        lst_contours_samples = []
 
-        contours_samples = []
+        for (contour_idx, contour) in enumerate(contours):
+            if (len(contour) < sample_size):
+                continue
+            if (self.debug_level >= 4):
+                print "contour #", contour_idx, " length = ", len(contour)
+            contour_samples = np.ndarray((sample_size, 1, 2), contours[0].dtype)
 
-        for contour in contours:
-            contour_samples_count = sample_size
-            contour_samples = np.ndarray((contour_samples_count, 1, 2), contours[0].dtype)
-
-            marker_step = max((float)(len(contour)) / (float)(sample_size), 1)
+            marker_step = (float)(len(contour)) / (float)(sample_size)
+            if (marker_step < 1):
+                print "{}: ----- ERROR ----- marker step < 1 "
             contour_marker = 0
-            contour_idx = 0
-            for sample_idx in xrange(0, contour_samples_count - 1):
-                if (contour_idx >= len(contour)):
+            contour_sample_idx = 0
+            for sample_idx in xrange(0, sample_size):
+                if (contour_sample_idx >= len(contour)):
                     break
-                contour_samples[sample_idx, :, :] = contour[contour_idx].copy()
+                contour_samples[sample_idx, :, :] = contour[contour_sample_idx]
 
                 contour_marker += marker_step
-                contour_idx = round(contour_marker)
-            if (contour_idx < len(contour)):
-                contours_samples.append(contour_samples)
+                contour_sample_idx = round(contour_marker)
+            lst_contours_samples.append(contour_samples)
 
-        return contours_samples
+        if (self.debug_level >= 4):
+            print "contours:\n", contours
+            print "sampled contours:\n", lst_contours_samples
+
+        return lst_contours_samples
 
     def compute_shapecontext(self, cv_img):
 
@@ -138,13 +144,13 @@ class ShapeContextCupRec:
 
         return contours_SC
 
-    def cupRec_single_query_cb(self, single_snapshot_query):
-        fname = self.cupRec_single_query_cb.__name__
+    def cupRec_single_query(self, cv_img):
+        fname = "{}::{}".format(self.__class__.__name__,  self.cupRec_single_query.__name__)
 
         """
 
         :param single_snapshot_query:
-        :type single_snapshot_query: SingleCupRecQueryRequest
+        :type single_snapshot_query: numpy.ndarray
         """
 
         rospy.logdebug("{}: Starting single query cup recognition...".format(fname))
@@ -154,15 +160,8 @@ class ShapeContextCupRec:
         else:
             start = 0
 
-        try:
-            rospy.logdebug("{}: Converting ROS img format to CvMat".format(fname))
-            cv_img = cv_bridge.CvBridge().imgmsg_to_cv2(single_snapshot_query.snapshot)
-        except cv_bridge.CvBridgeError, cv_bridge_except:
-            rospy.logerr("{}: Failed to convert ROS image message to CvMat\n{}".format(fname, cv_bridge_except))
-            return None
-
         rospy.logdebug("{}: Computing shape contexts for contours in image".format(fname))
-        contour_match_list = self.compute_contours_shapecontext_cost(cv_img)
+        contour_match_list = self.compute_contours_match_cost(cv_img)
 
         min_cost = sys.maxint
         min_cost_idx = -1
@@ -172,29 +171,15 @@ class ShapeContextCupRec:
                 min_cost_idx = match_idx
                 rospy.logdebug("{}: Setting best-cost contour to contour_{}".format(fname, match_idx))
 
-        rospy.logdebug("{}: Creating query response".format(fname))
-        response = SingleCupRecQueryResponse()
-        response_img = np.zeros((cv_img.shape[0], cv_img.shape[1], 1))
-        cv2.drawContours(response_img, [contour_match_list[min_cost_idx][1]], 0, 255)
-
-        try:
-            rospy.logdebug("{}: Converting CvMat to ROS img".format(fname))
-            response.match_contour = cv_bridge.CvBridge().cv2_to_imgmsg(response_img)
-        except cv_bridge.CvBridgeError, cv_bridge_except:
-            rospy.logerr(
-                "{}: Failed to convert contour image from CvMat to Ros Msg\n{}".format(fname, cv_bridge_except))
-            return
-        response.match_cost = contour_match_list[min_cost_idx][0]
-
         if (self.debug_level >= 1):
             end = time.time()
             rospy.logdebug("{}: Query time = {}".format(fname, end - start))
         rospy.logdebug("{}: Sending response".format(fname))
 
-        return response
+        return contour_match_list[min_cost_idx]
 
-    def compute_contours_shapecontext_cost(self, cv_img):
-        fname = self.compute_contours_shapecontext_cost.__name__
+    def compute_contours_match_cost(self, cv_img):
+        fname = "{}::{}".format(self.__class__.__name__,  self.compute_contours_match_cost.__name__)
         """
         Computes the shapecontext of all the contours in cv_img, and stores them in a list
         along with the cost of matching each contour to its best match in the DB
@@ -210,7 +195,7 @@ class ShapeContextCupRec:
         # end debug
         ''' Compute the shapecontext for all the contours in the image.
                     Note: Ignores contours nested inside other contours '''
-        rospy.logdebug("Computing shape context for image")
+        rospy.logdebug("{}: Computing shape context for image".format(fname))
         contours_SC = self.compute_shapecontext(cv_img)
         if (self.debug_level >= 2):
             rospy.logdebug("{}: Computed shape context".format(fname))
@@ -227,13 +212,16 @@ class ShapeContextCupRec:
         contour_list = []
         for (contour_idx, (contour, contour_SC)) in enumerate(contours_SC):
 
-            rospy.logdebug("{}: Finding best match for contour_{}. Stand by...".format(fname, contour_idx))
+            rospy.loginfo("{}: Finding best match for contour_{}. Stand by...".format(fname, contour_idx))
             match_cost = sys.maxint
             match_DB_contour = self.shapecontext_DB[0][0]
             DB_match_idx = 0
             for (index, (DB_contour, DB_contour_SC)) in enumerate(self.shapecontext_DB):
                 ''' Compute the difference between the contour and the DB contour '''
+                rospy.logdebug("{}: Computing match cost to DB contour #{}".format(fname, index))
                 contour_cost, indices = sc.diff(DB_contour_SC, contour_SC)
+                rospy.logdebug("{}: Match cost = {}".format(fname, contour_cost))
+
                 if (contour_cost < match_cost):
                     match_cost = contour_cost
                     match_DB_contour = DB_contour
@@ -253,8 +241,8 @@ class ShapeContextCupRec:
             contour_list.append((match_cost, contour, match_DB_contour))
         return contour_list
 
-    def cupRec_aggregation_cb(self, snapshot_data):
-        fname = self.cupRec_aggregation_cb.__name__
+    def aggregate_image(self, image_data):
+        fname = "{}::{}".format(self.__class__.__name__,  self.aggregate_image.__name__)
 
         '''
         Takes a snapshot data object, filters the image in it according to the color filtering parameters
@@ -263,25 +251,21 @@ class ShapeContextCupRec:
         to the local database.
 
         :param snapshot_data: Data from /cupinator/cup_recognizer/snapshot topic (message type snapshotData)
-        :type snapshot_data: AggregationData
+        :type snapshot_data: (np.ndarray, key)
         '''
 
         if (self.debug_level >= 1):
             start = time.time()
         else:
             start = 0
-        try:
-            cv_img = cv_bridge.CvBridge().imgmsg_to_cv2(snapshot_data.Image)
-        except cv_bridge.CvBridgeError, cv_bridge_except:
-            rospy.logerr("{}: Failed to convert ROS image message to CvMat\n{}".format(fname, cv_bridge_except))
-            return
+        cv_img = image_data[0]
 
-        contour_list = self.compute_contours_shapecontext_cost(cv_img)
+        contour_list = self.compute_contours_match_cost(cv_img)
 
         self.lock.acquire()
 
         for (cost, contour, DB_contour) in contour_list:
-            heapq.heappush(self.contour_heap, (cost, contour, DB_contour))
+            heapq.heappush(self.contour_heap, (cost, contour, image_data[1], DB_contour))
 
         self.lock.release()
 
@@ -289,54 +273,42 @@ class ShapeContextCupRec:
             end = time.time()
             rospy.logdebug("{}: time = {}".format(fname, end - start))
 
-    def cupRec_aggregate_query_cb(self, cupRec_query_request):
-        fname = self.cupRec_single_query_cb.__name__
+    def cupRec_aggregate_query(self, flush_heap=False):
         """
 
-        :param cupRec_query_request: Request message
-        :type cupRec_query_request: CupRecQueryRequest
-
-        :return: CupRecQueryResponse
+        :param flush_heap: boolean indicating if we need to reset the heap storing all the computed SCs
+        :return: (cost, contour, key, DB_contour) with the lower cost in the contour_heap
         """
+        fname = "{}::{}".format(self.__class__.__name__,  self.cupRec_aggregate_query.__name__)
 
         rospy.logdebug("{}: Acquiring match heap lock".format(fname))
         self.lock.acquire()
 
-        response = CupRecQueryResponse()
-        response_match = self.contour_heap[0]
+        optimal_match = self.contour_heap[0]
 
-        response.match_cost = response_match[0]
-        response.point_count = len(response_match[1])
-        rospy.logdebug("{}: The best match costs {} and has {} points".
-                       format(fname, response.match_cost, response.point_count))
-        response.x_coords = response_match[1][:, 0, 0]
-        response.x_coords = response_match[1][:, 0, 1]
-
-        if (cupRec_query_request.flush):
+        if (flush_heap):
             rospy.logdebug("{}: flushing match heap".format(fname))
             self.contour_heap = []
 
         rospy.logdebug("{}: Releasing match heap lock".format(fname))
         self.lock.release()
 
-        return response
-
-    def subscribe_to_snapshots(self):
-        rospy.Subscriber("/cupinator/cup_recognizer/image_aggregate", AggregationData, self.cupRec_aggregation_cb,
-                         queue_size=12)
-        rospy.Service("/cupinator/cup_recognizer/single_cupRec_query", SingleCupRecQuery, self.cupRec_single_query_cb)
-        rospy.Service("/cupinator/cup_recognizer/cupRec_query_aggregate", CupRecQuery, self.cupRec_aggregate_query_cb)
+        return optimal_match
 
 
 if __name__ == '__main__':
     try:
-        fname = "main"
-        rospy.init_node("CupRec", anonymous=False, log_level=rospy.DEBUG)
-        cupRecognizer = ShapeContextCupRec()
-        rospy.loginfo("{}: Initializing node".format(fname))
-        rospy.loginfo("{}: Starting subscriber".format(fname))
-        cupRecognizer.subscribe_to_snapshots()
+        main_name = "{}::{}".format("CupRec.py",  "main")
 
-        rospy.spin()
+        cupRecognizer = ShapeContextCupRec()
+
+        test_img_file_name = "red_test.jpg"
+        mock_path = os.path.join(os.path.dirname(__file__), "MockCamInput/")
+        rospy.logdebug("{}: loading image from {}".format(main_name, mock_path + test_img_file_name))
+        cap_img = cv2.imread(mock_path + test_img_file_name)
+        rospy.logdebug("{}: Sending {} to cupRec".format(main_name, test_img_file_name))
+        best_match = cupRecognizer.cupRec_single_query(cap_img)
+        rospy.logdebug("{}: {} cost = {}".format(main_name, test_img_file_name, best_match[0]))
+
     except rospy.ROSInterruptException, e:
         print e
