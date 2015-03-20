@@ -151,6 +151,8 @@ class ShapeContextCupRec:
 
         :param single_snapshot_query:
         :type single_snapshot_query: numpy.ndarray
+
+        :return: Minimal tuple with respect to cost - (match cost, contour, matched DB contour)
         """
 
         rospy.logdebug("{}: Starting single query cup recognition...".format(fname))

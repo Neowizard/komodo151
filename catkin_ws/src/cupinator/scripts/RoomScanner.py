@@ -186,102 +186,93 @@ class RoomScanner:
                   "green_scaled.jpg", "green270.jpg"]
         # end mock
 
+        # 360deg scan
         frames_per_circle = (int)(math.ceil(360.0 / self.camera_horizontal_width))
         frames = []
         for frame_idx in xrange(0, frames_per_circle):
+            # Handle aborts. Flush queue
             if (self.abort_scan):
                 rospy.loginfo("{}: Clearing queue and aborting scan".format(fname))
                 while (not self.cupRec_queue.empty()):
                     self.cupRec_queue.get(block=False)
                 rospy.loginfo("{}: Cleared queue. Worker thread will halt after current job")
                 return
-
+            # Capture image
             rospy.loginfo("{}: capturing image #{}".format(fname, frame_idx))
             cap_img = self.capture_image(inputs[frame_idx])
             frames.insert(cap_img, frame_idx)
-            # mock
-            self.cupRec_queue.put((cap_img, frame_idx))
-            # end mock
 
+            # Send image to worker thread
+            self.cupRec_queue.put((cap_img, frame_idx))
+
+            # Rotate to next frame
             #mock
             rospy.logdebug("{}: Sleeping for 5 seconds to simulate rotation".format(fname))
             rospy.sleep(5)
             #self.rotate(self.frame_angle)
 
+        # Wait for worker thread
         rospy.logdebug("{}: Waiting for aggregator thread to finish processing images".format(fname))
         self.cupRec_queue.join()
+
+        # Get result from CupRec
         best_match = self.cupRec.cupRec_aggregate_query(True)
         match_frame = best_match[2]
         matched_contour = best_match[1]
         match_cost = best_match[0]
 
-        rospy.loginfo("{}: best match cost = {} at frame {}".format(fname, match_cost, match_frame))
-        rospy.logdebug("{}: Scan time = {}".format(fname, time.time() - start))
-
-
+        # Calculate match angle
         rospy.logdebug("{}: Computing angle in frame from contour".format(fname))
         match_angle_in_frame = self.contour_angle_in_frame(matched_contour, frames[match_frame])
         absolute_match_angle = frames_per_circle * match_frame + match_angle_in_frame
+        rospy.loginfo("{}: best match cost = {} at frame {}. Frame angle (absolute) = {}deg ({}deg)"
+                      .format(fname, match_cost, match_frame, match_angle_in_frame, absolute_match_angle))
 
+        # Construct result message
         rospy.logdebug("{}: Constructing RoomScannerResult message".format(fname))
         scan_result = RoomScannerResult()
         scan_result.cost = match_cost
         scan_result.angle = absolute_match_angle
 
-        rospy.logdebug("{}: Publishing scan result".format(fname))
+        # Publish message
+        rospy.logdebug("{}: Publishing scan result (cost = {}, angle = {}"
+                       .format(fname, scan_result.cost, scan_result.angle))
         scan_publisher = rospy.Publisher("/cupinator/room_scanner/result", RoomScannerResult, queue_size=2)
         scan_publisher.publish(scan_result)
 
+        if (self.debug_level >= 1):
+            rospy.logdebug("{}: Total time = {}".format(fname, time.time() - start))
 
     def stationary_scan(self):
         fname = "{}::{}".format(self.__class__.__name__, self.stationary_scan.__name__)
 
-        if (self.debug_level >= 1):
-            start = time.time()
-        else:
-            start = 0
+        start = time.time()
 
+        # Capture image
         test_img_file_name = "red_test.jpg"
         cap_img = self.capture_image("{0}".format(test_img_file_name))
+
+        # Find best match contour
         rospy.logdebug("{}: Sending {} to cupRec".format(fname, test_img_file_name))
         best_match = self.cupRec.cupRec_single_query(cap_img)
-        rospy.loginfo("{}: {} cost = {}".format(fname, test_img_file_name, best_match[0]))
+        matched_contour = best_match[1]
+        match_cost = best_match[0]
 
-        """
-        rospy.wait_for_service("/cupinator/cup_recognizer/single_cupRec_query",
-                               10)  # Waite up to 10 seconds for service
-        try:
+        # Calculate match angle
+        rospy.logdebug("{}: Computing angle in frame from contour".format(fname))
+        match_angle_in_frame = self.contour_angle_in_frame(matched_contour, cap_img)
 
-            cupRec_srv = rospy.ServiceProxy("cupinator/cup_recognizer/single_cupRec_query", SingleCupRecQuery)
-            test_img_file_name = "red_test.jpg"
-            message_img = self.capture_image("{0}".format(test_img_file_name))
-            rospy.logdebug("{}: Sending {} to single_cupRec".format(fname, test_img_file_name))
-            best_match_contour = cupRec_srv(message_img)
-            rospy.logdebug("{}: {} cost = {}".format(fname, test_img_file_name, best_match_contour.match_cost))
-            '''message_img = self.capture_image("green90.jpg")
-            best_match_contour = cupRec_srv(message_img)
-            print "green90.jpg cost = ", best_match_contour.match_cost
-            message_img = self.capture_image("green180.jpg")
-            best_match_contour = cupRec_srv(message_img)
-            print "green180.jpg cost = ", best_match_contour.match_cost
-            message_img = self.capture_image("green270.jpg")
-            best_match_contour = cupRec_srv(message_img)
-            print "green270.jpg cost = ", best_match_contour.match_cost
-            message_img = self.capture_image("green_scaled.jpg")
-            best_match_contour = cupRec_srv(message_img)
-            print "green_scaled.jpg cost = ", best_match_contour.match_cost
-            message_img = self.capture_image("green_rotated.jpg")
-            best_match_contour = cupRec_srv(message_img)
-            print "green_rotated.jpg cost = ", best_match_contour.match_cost
-            message_img = self.capture_image("green_sprayed.jpg")
-            best_match_contour = cupRec_srv(message_img)
-            print "green_sprayed.jpg cost = ", best_match_contour.match_cost
-            message_img = self.capture_image("green_destroyed.jpg")
-            best_match_contour = cupRec_srv(message_img)
-            print "green_destroyed.jpg cost = ", best_match_contour.match_cost'''
-        except rospy.ServiceException, e:
-            rospy.logerr("Service call failed. Exception: %s" % e)
-        """
+        # Create result to publish
+        rospy.logdebug("{}: Constructing RoomScannerResult message".format(fname))
+        scan_result = RoomScannerResult()
+        scan_result.cost = match_cost
+        scan_result.angle = match_angle_in_frame
+
+        rospy.logdebug("{}: Publishing scan result (cost = {}, angle = {})"
+                       .format(fname, scan_result.cost, scan_result.angle))
+        scan_publisher = rospy.Publisher("/cupinator/room_scanner/result", RoomScannerResult, queue_size=2)
+        scan_publisher.publish(scan_result)
+
 
         if (self.debug_level >= 1):
             rospy.logdebug("{}: Total time = {}".format(fname, time.time() - start))
