@@ -23,6 +23,7 @@ class Walker:
         if (accept_command):
             rospy.Subscriber('/cupinator/walk/command', WalkCommand, self.walkUntilCollision)
         rospy.Subscriber('/komodo_1/odom_pub', Odometry, self.checkDistanceTraveled)
+	rospy.loginfo("started listening")
 
 
     def checkCollision(self, laserData):
@@ -38,6 +39,7 @@ class Walker:
         while (i<486):
             if (laserData.ranges[i]<=self.minDistance and not math.isnan(laserData.ranges[i])):
                 self.collisionAlert = True
+                rospy.loginfo("got collision alert")
                 break
             i=i+1
 
@@ -52,6 +54,7 @@ class Walker:
 
 
         if (self.odomCheck):
+
             #SET VALUE TO BEGIN POINT
             if (self.beginPoint is None):
                 self.beginPoint = odom.pose
@@ -78,22 +81,25 @@ class Walker:
             #
 
             # CHECK IF THE WHEELS PASSED THE RESET POINT IN THE CIRCLE
-            Y2 = 2*math.pi+Y2 if Y1>Y2 else Y2
+            Y2 = 2*math.pi+Y2 if (Y1 - Y2 > 0.01) else Y2
             #
 
             angularTraveled = Y2 - Y1
+            rospy.loginfo("Calculated {} (Y1 = {}, Y2 = {}) angular distance traveled. target = {}".format(angularTraveled, Y1, Y2,  self.angularDistance))
             #
 
             if angularTraveled >= self.angularDistance:
+                rospy.loginfo("setting angular distance alert True {}")
                 self.angularDistanceAlert = True
 
-    def moveAngular(self, distance):
+    def moveAngular(self, distance, ignoreCollisionAlert=False):
         '''global self.odomCheck
         global angularDistance
         global self.angularDistanceAlert
         global self.collisionAlert
         global self.beginPoint'''
 
+	rospy.loginfo("trying to move angular")
         self.angularDistanceAlert = False
         self.angularDistance = distance
 
@@ -104,7 +110,7 @@ class Walker:
 
         rate = rospy.Rate(10)
         walkTwist = Twist()
-        while not (self.angularDistanceAlert or self.collisionAlert):
+        while not (self.angularDistanceAlert or (ignoreCollisionAlert or self.collisionAlert)):
             walkTwist.angular.z = 0.3*math.pi
             walkPub.publish(walkTwist)
             rate.sleep()
@@ -122,7 +128,7 @@ class Walker:
         global self.linearDistanceAlert
         global self.collisionAlert
         global self.beginPoint'''
-
+	rospy.loginfo("trying to move linear")
         self.linearDistanceAlert = False
         self.linearDistance = distance
 
@@ -148,10 +154,11 @@ class Walker:
 
 
     def walkUntilCollision(self, cmd):
+        self.collisionAlert = False
 
         self.moveAngular((cmd.angle*math.pi)/180)
 
-        self.moveLinear(cmd.distance)
+        self.moveLinear((float)(cmd.distance)/100)
 
         # PUBLISH WALK RESULT
         walkPub = rospy.Publisher('/cupinator/walk/result', WalkResult, queue_size=2)
