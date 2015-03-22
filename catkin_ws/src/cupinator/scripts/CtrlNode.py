@@ -53,6 +53,10 @@ def start_approach(room_scanner_result):
     the direction. Below that distance, we go straight.
     :return: None
     """
+
+    global walk_publisher
+    walk_publisher = rospy.Publisher("/cupinator/walk/command", WalkCommand, queue_size=5)
+
     angle = room_scanner_result.angle
     distance = room_scanner_result.distance
     if distance > STRAIGHT_WALK_MIN_DIST:
@@ -77,8 +81,13 @@ def stop():
     """
     Stop the robot from doing the task, in an orderly manner.
     """
+    global current_state
+    if (current_state == "ROOM_SCAN"):
+        room_scanner_publisher.publish(RoomScannerCommand(None, "stop", False))
+
+    # TODO send stop message to the proper node, for other states.
+
     change_state("IDLE")
-# TODO send stop message to the proper node, if any.
 
 
 def abort():
@@ -95,6 +104,7 @@ def abort():
 
 
 def scan_callback(room_scanner_result):
+
     if current_state == "ROOM_SCAN":
         if room_scanner_result.cost > COST_THRESHOLD:
             change_state("NO_CUP")
@@ -128,8 +138,13 @@ def command_callback(command_msg):
     """
     Got a command from the Cli
     """
+    global room_scanner_publisher
+
+    room_scanner_publisher = rospy.Publisher("/cupinator/room_scanner/command", RoomScannerCommand, queue_size=5)
+
     command = command_msg.command
     rospy.loginfo("command %s", command)
+
     if command == "scan":
         start_scan()
     elif command == "stop":
@@ -169,11 +184,9 @@ if __name__ == '__main__':
         status_publisher = rospy.Publisher("/cupinator/ctrl/status", CtrlStatus, queue_size=10)
         rospy.Subscriber("/cupinator/ctrl/command", CtrlCommand, command_callback)
 
-        room_scanner_publisher = rospy.Publisher("/cupinator/room_scanner/command", RoomScannerCommand, queue_size=5)
         rospy.Subscriber("/cupinator/room_scanner/result", RoomScannerResult, scan_callback)
         
-        walk_publisher = rospy.Publisher("/cupinator/walk/command", WalkCommand, queue_size=5)
-        rospy.Subscriber("/cupinator/walk/result", WalkResult, walk_callback )
+        rospy.Subscriber("/cupinator/walk/result", WalkResult, walk_callback)
 
         change_state("IDLE")
 

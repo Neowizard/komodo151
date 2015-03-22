@@ -122,14 +122,12 @@ class SC(object):
         return C
         
     def __hungurian_method(self,C):
-        t = time.time()
         m = munkres.Munkres()
         indexes = m.compute(C.tolist())
         total = 0
         for row, column in indexes:
             value = C[row][column]
             total += value
-        print 'PROFILE HUNGURIAN ALGORITHM: ' + str(time.time()-t)     
 
         return total,indexes
 
