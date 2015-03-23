@@ -140,22 +140,24 @@ class RoomScanner:
         fname = "{}::{}".format(self.__class__.__name__, self.contour_angle_in_frame.__name__)
 
         x_coords_sum = 0
-        max_x_coord = frame.shape[2]
+        max_x_coord = frame.shape[1]
+        rospy.logdebug("{}: Frame shape = {}, max_x_coord = {}".format(fname, frame.shape, max_x_coord))
 
         for (point_idx, point) in enumerate(contour[:, 0, :]):
             if (point[0] > max_x_coord):
-                rospy.logdebug("{}: Point #{} in contour is out of bounds of the reference frame (shape = {})"
-                               .format(fname, point_idx, frame.shape))
+                rospy.logdebug("{}: Point #{} ({})in contour is out of bounds of the reference frame (shape = {})"
+                               .format(fname, point_idx, point, frame.shape))
             x_coords_sum += point[0]
 
         # relative_center_x is the position of the center of the contour relative to the center of the frame
         # normalized to [0, 1]
         relative_center_x = x_coords_sum / contour.shape[0] - 0.5
-
+        
         # The actual angle of the center of the contour in the frame (the center of the frame is 0deg)
-        center_point_angle = ((float)(relative_center_x)/frame.shape[2]) * self.camera_horizontal_width
-
-        return center_point_angle
+        absolute_center_x = ((float)(relative_center_x)/frame.shape[1]) * self.camera_horizontal_width
+        rospy.logdebug("{}: x_coords_sum = {}, relative_center_x = {}, absolute_center_x = {}"
+                       .format(fname, x_coords_sum, relative_center_x, absolute_center_x))
+        return absolute_center_x
 
 
     def capture_image(self, mock_file):
@@ -200,7 +202,7 @@ class RoomScanner:
             # Capture image
             rospy.loginfo("{}: capturing image #{}".format(fname, frame_idx))
             cap_img = self.capture_image(inputs[frame_idx])
-            frames.insert(cap_img, frame_idx)
+            frames.insert(frame_idx, cap_img)
 
             # Send image to worker thread
             self.cupRec_queue.put((cap_img, frame_idx))
@@ -276,6 +278,7 @@ class RoomScanner:
 
         if (self.debug_level >= 1):
             rospy.logdebug("{}: Total time = {}".format(fname, time.time() - start))
+
 
 
 if __name__ == '__main__':

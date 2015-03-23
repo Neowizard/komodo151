@@ -31,7 +31,7 @@ class ShapeContextCupRec:
     upper_green = np.array([75, 255, 255])
 
     sample_size = 0
-    debug_level = 4
+    debug_level = 1
 
     lock = Lock()
     shapecontext_DB = []
