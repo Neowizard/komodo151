@@ -149,15 +149,16 @@ class RoomScanner:
                                .format(fname, point_idx, point, frame.shape))
             x_coords_sum += point[0]
 
-        # relative_center_x is the position of the center of the contour relative to the center of the frame
+        # norm_center_x is the position of the center of the contour relative to the center of the frame
         # normalized to [0, 1]
-        relative_center_x = x_coords_sum / contour.shape[0] - 0.5
+        center_x = x_coords_sum / contour.shape[0]
+        norm_center_x = (float(center_x)/frame.shape[1]) - 0.5
         
         # The actual angle of the center of the contour in the frame (the center of the frame is 0deg)
-        absolute_center_x = ((float)(relative_center_x)/frame.shape[1]) * self.camera_horizontal_width
-        rospy.logdebug("{}: x_coords_sum = {}, relative_center_x = {}, absolute_center_x = {}"
-                       .format(fname, x_coords_sum, relative_center_x, absolute_center_x))
-        return absolute_center_x
+        horizontal_angle = norm_center_x * self.camera_horizontal_width
+        rospy.logdebug("{}: x_coords_sum = {}, norm_center_x = {}, horizontal_angle = {}"
+                       .format(fname, x_coords_sum, norm_center_x, horizontal_angle))
+        return horizontal_angle
 
 
     def capture_image(self, mock_file):

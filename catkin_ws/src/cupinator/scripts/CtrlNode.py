@@ -55,7 +55,6 @@ def start_approach(room_scanner_result):
     """
 
     global walk_publisher
-    walk_publisher = rospy.Publisher("/cupinator/walk/command", WalkCommand, queue_size=5)
 
     angle = room_scanner_result.angle
     distance = room_scanner_result.distance
@@ -140,7 +139,6 @@ def command_callback(command_msg):
     """
     global room_scanner_publisher
 
-    room_scanner_publisher = rospy.Publisher("/cupinator/room_scanner/command", RoomScannerCommand, queue_size=5)
 
     command = command_msg.command
     rospy.loginfo("command %s", command)
@@ -183,9 +181,11 @@ if __name__ == '__main__':
 
         status_publisher = rospy.Publisher("/cupinator/ctrl/status", CtrlStatus, queue_size=10)
         rospy.Subscriber("/cupinator/ctrl/command", CtrlCommand, command_callback)
+        walk_publisher = rospy.Publisher("/cupinator/walk/command", WalkCommand, queue_size=5)
 
         rospy.Subscriber("/cupinator/room_scanner/result", RoomScannerResult, scan_callback)
-        
+        room_scanner_publisher = rospy.Publisher("/cupinator/room_scanner/command", RoomScannerCommand, queue_size=5)
+
         rospy.Subscriber("/cupinator/walk/result", WalkResult, walk_callback)
 
         change_state("IDLE")
