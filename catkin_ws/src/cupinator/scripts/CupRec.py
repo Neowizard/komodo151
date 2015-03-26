@@ -22,9 +22,9 @@ class ShapeContextCupRec:
     sample_size: Number of contour samples to send to SC algorithm
     """
 
-    lower_red = np.array([0, 80, 50])
+    lower_red = np.array([0, 80, 100])
     upper_red = np.array([4, 255, 255])
-    lower_high_red = np.array([172, 80, 50])
+    lower_high_red = np.array([172, 80, 100])
     upper_high_red = np.array([179, 255, 255])
 
     lower_green = np.array([45, 40, 40])
@@ -32,6 +32,7 @@ class ShapeContextCupRec:
 
     sample_size = 0
     debug_level = 1
+
 
     lock = Lock()
     shapecontext_DB = []
@@ -73,15 +74,21 @@ class ShapeContextCupRec:
             end_time = time.time()
             rospy.logdebug("{}: cupinator/cupRec: DB load time = {}".format(fname, end_time - start_time))
 
-    def sample_contours_from_binary_img(self, bw_img, sample_size, low_th=50, high_th=200):
+    def sample_contours_from_binary_img(self, bw_img, sample_size, sample_th=-1, low_th=50, high_th=200):
         """
         :param bw_img: (ndarray) Image to get contour sample from
         :param sample_size: (int) Maximal number of samples
         :return: (array) A 2D array of coordinates (x,y) sampled from the contour
         """
-        erosion_kernel = np.asarray([[1, 1, 1], [1, 1, 1], [1, 1, 1]], np.uint8)
-        bw_img = cv2.dilate(bw_img, erosion_kernel)
+        fname = "{}::{}".format(self.__class__.__name__,  self.sample_contours_from_binary_img.__name__)
+        if (sample_th == -1):
+            sample_th = sample_size
+        dilation_kernel = np.asarray([[0, 1, 0],
+                                      [1, 0, 1],
+                                      [0, 1, 0]], np.uint8)
+        bw_img = cv2.dilate(bw_img, dilation_kernel)
         contour_img = cv2.Canny(bw_img, low_th, high_th)
+        #bw_img = cv2.dilate(bw_img, dilation_kernel)
 
         if (self.debug_level >= 2):
             cv2.imshow("canny_dialated", contour_img)
@@ -92,20 +99,20 @@ class ShapeContextCupRec:
         lst_contours_samples = []
 
         for (contour_idx, contour) in enumerate(contours):
-            if (len(contour) < sample_size):
+            if (len(contour) < sample_th):
                 continue
             if (self.debug_level >= 4):
                 print "contour #", contour_idx, " length = ", len(contour)
             contour_samples = np.ndarray((sample_size, 1, 2), contours[0].dtype)
 
             marker_step = (float)(len(contour)) / (float)(sample_size)
-            if (marker_step < 1):
-                print "{}: ----- ERROR ----- marker step < 1 "
             contour_marker = 0
             contour_sample_idx = 0
             for sample_idx in xrange(0, sample_size):
                 if (contour_sample_idx >= len(contour)):
-                    break
+                    rospy.logdebug("{}: --- ERROR --- Crossed contour array length".format(fname))
+                    contour_sample_idx = 0
+                    marker_step = (float)(len(contour)) / (float)(sample_size - (sample_idx-1))
                 contour_samples[sample_idx, :, :] = contour[contour_sample_idx]
 
                 contour_marker += marker_step
@@ -124,6 +131,7 @@ class ShapeContextCupRec:
         :rtype : List of (Contour, ShapeContext) elements
         :param cv_img: Input BGR image
         """
+        fname = "{}::{}".format(self.__class__.__name__,  self.compute_shapecontext.__name__)
 
         hsv_img = cv2.cvtColor(cv_img, cv2.COLOR_BGR2HSV)
         binary_img = cv2.inRange(hsv_img, self.lower_red, self.upper_red)
@@ -131,9 +139,16 @@ class ShapeContextCupRec:
 
         if (self.debug_level >= 2):
             cv2.imshow("binary_img", binary_img)
-            cv2.waitKey()
+            #cv2.waitKey()
 
-        input_samples = self.sample_contours_from_binary_img(binary_img, self.sample_size)
+        sample_th = 70  #self.sample_size
+        input_samples = []
+        while ((len(input_samples) == 0) and (sample_th >= 40)):
+            input_samples = self.sample_contours_from_binary_img(binary_img, self.sample_size, sample_th)
+            rospy.logdebug("{}: Sampled {} contours from image".format(fname, len(input_samples)))
+            if (len(input_samples) == 0):
+                sample_th -= self.sample_size/5
+                rospy.logdebug("{}: Re-sampling image (sample count threshold reduced to {})".format(fname, sample_th))
 
         sc = cupRec.SC.SC()
 
@@ -145,15 +160,13 @@ class ShapeContextCupRec:
         return contours_SC
 
     def cupRec_single_query(self, cv_img):
-        fname = "{}::{}".format(self.__class__.__name__,  self.cupRec_single_query.__name__)
-
         """
-
         :param single_snapshot_query:
         :type single_snapshot_query: numpy.ndarray
 
         :return: Minimal tuple with respect to cost - (match cost, contour, matched DB contour)
         """
+        fname = "{}::{}".format(self.__class__.__name__,  self.cupRec_single_query.__name__)
 
         rospy.logdebug("{}: Starting single query cup recognition...".format(fname))
 
@@ -164,7 +177,6 @@ class ShapeContextCupRec:
 
         rospy.logdebug("{}: Computing shape contexts for contours in image".format(fname))
         contour_match_list = self.compute_contours_match_cost(cv_img)
-
         min_cost = sys.maxint
         min_cost_idx = -1
         for (match_idx, (match_cost, contour, DB_contour)) in enumerate(contour_match_list):
@@ -178,10 +190,12 @@ class ShapeContextCupRec:
             rospy.logdebug("{}: Query time = {}".format(fname, end - start))
         rospy.logdebug("{}: Sending response".format(fname))
 
-        return contour_match_list[min_cost_idx]
+        if (min_cost_idx < 0):
+            return None
+        else:
+            return contour_match_list[min_cost_idx]
 
     def compute_contours_match_cost(self, cv_img):
-        fname = "{}::{}".format(self.__class__.__name__,  self.compute_contours_match_cost.__name__)
         """
         Computes the shapecontext of all the contours in cv_img, and stores them in a list
         along with the cost of matching each contour to its best match in the DB
@@ -190,10 +204,11 @@ class ShapeContextCupRec:
         :return: list of (match cost, contour, matched DB contour)
                         contours are ndarray[self.sample_size, 1, 2]
         """
+        fname = "{}::{}".format(self.__class__.__name__,  self.compute_contours_match_cost.__name__)
 
         if (self.debug_level >= 2):
             cv2.imshow('img', cv_img)
-            cv2.waitKey(0)
+            #cv2.waitKey(0)
         # end debug
         ''' Compute the shapecontext for all the contours in the image.
                     Note: Ignores contours nested inside other contours '''
@@ -266,8 +281,10 @@ class ShapeContextCupRec:
 
         self.lock.acquire()
 
-        for (cost, contour, DB_contour) in contour_list:
-            heapq.heappush(self.contour_heap, (cost, contour, image_data[1], DB_contour))
+        for (list_idx, (cost, contour, DB_contour)) in enumerate(contour_list):
+            rospy.logdebug("{}: pushing ({}, contour_{}, {}, DB_contour) onto contour heap"
+                           .format(fname, cost, list_idx, image_data[1]))
+            self.contour_heap.append((cost, contour, image_data[1], DB_contour))
 
         self.lock.release()
 
@@ -286,7 +303,10 @@ class ShapeContextCupRec:
         rospy.logdebug("{}: Acquiring match heap lock".format(fname))
         self.lock.acquire()
 
-        optimal_match = self.contour_heap[0]
+        if ((self.contour_heap is None) or (len(self.contour_heap) == 0)):
+            optimal_match = None
+        else:
+            optimal_match = min(self.contour_heap)
 
         if (flush_heap):
             rospy.logdebug("{}: flushing match heap".format(fname))
