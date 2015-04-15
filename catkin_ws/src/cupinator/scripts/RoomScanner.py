@@ -167,14 +167,14 @@ class RoomScanner:
         center_x = x_coords_sum / contour.shape[0]
         rospy.logdebug("{}: Contour center (x, y) = ({}, {})".format(fname, center_x, center_y))
 
-        return (center_x, center_y)
+        return (center_y, center_x)
 
     def point_angle_in_frame(self, point, frame):
         """
         Gets the horizontal angle of the point in the frame (assumes frame's width is <camera_angle_width>).
         Angle returned is relative to the center of the frame (the center is 0deg)
 
-        :param point: (x, y) coordinates
+        :param point: (y, x) coordinates
         :param frame: Reference frame (image)
         :type frame: np.ndarray
         """
@@ -183,13 +183,13 @@ class RoomScanner:
         rospy.logdebug("{}: Frame shape = {}, point = {}".format(fname, frame.shape, point))
 
         # Frame shape is (Height, Width, Depth), point is (x, y)
-        if (((point[0] < 0) or (point[1] < 0)) or
-                ((point[0] > frame.shape[1]) or (point[1] > frame.shape[0]))):
+        if (((point[1] < 0) or (point[0] < 0)) or
+                ((point[1] > frame.shape[1]) or (point[0] > frame.shape[0]))):
             rospy.logdebug("{}: Point {} is out of bounds of the reference frame (shape = {})"
                            .format(fname, point, frame.shape))
 
         # norm_point_x - x coordinate normalized to [-0.5, 0.5] relative to the center of the frame
-        norm_point_x = (float(point[0])/frame.shape[1]) - 0.5
+        norm_point_x = (float(point[1])/frame.shape[1]) - 0.5
 
         # The actual angle of the point in the frame (the center of the frame is 0deg)
         horizontal_angle = norm_point_x * self.camera_horizontal_arc
@@ -270,18 +270,18 @@ class RoomScanner:
         # end mock
 
         #rospy.loginfo("{}: Setting camera arg to 180deg for testing".format(fname))
-        self.camera_horizontal_arc = 180
+        #self.camera_horizontal_arc = 180
 
         # 360deg scan
-        frames_per_circle = (int)(math.ceil(360.0 / self.camera_horizontal_arc))
+        frames_per_circle = (int)(360.0 / self.camera_horizontal_arc)
         frames = []
-        for frame_idx in xrange(0, frames_per_circle):
+        for frame_idx in xrange(0, 6):#frames_per_circle):
             # Handle aborts. Flush queue
             if (self.abort_scan):
                 rospy.loginfo("{}: Clearing queue and aborting scan".format(fname))
                 while (not self.cupRec_queue.empty()):
                     self.cupRec_queue.get(block=False)
-                rospy.loginfo("{}: Cleared queue. Worker thread will halt after current job")
+                rospy.loginfo("{}: Cleared quforeue. Worker thread will halt after current job")
                 return
             # Capture image
             rospy.loginfo("{}: capturing image #{}".format(fname, frame_idx))

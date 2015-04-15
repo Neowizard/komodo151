@@ -19,11 +19,19 @@ class Walker:
     beginPoint = None
     odomCheck = False
 
+    linearDistanceSquared = 0
+    odom_linearBeginPoint = 0
+    beginQuaternion = None
+    beginEuler = None
+    beginPoseX = 0
+    beginPoseY = 0
+    prevAngularTraveled = 0
+
     def __init__(self, accept_command=True):
         rospy.Subscriber('/komodo_1/scan', LaserScan, self.checkCollision)
         if (accept_command):
             rospy.Subscriber('/cupinator/walk/command', WalkCommand, self.walkUntilCollision)
-        rospy.Subscriber('/komodo_1/odom_pub', Odometry, self.checkDistanceTraveled, queue_size=2)
+        rospy.Subscriber('/komodo_1/odom_pub', Odometry, self.checkDistanceTraveled, queue_size=2, tcp_nodelay=True)
         rospy.loginfo("started listening")
 
 
@@ -63,30 +71,29 @@ class Walker:
             # SET VALUE TO BEGIN POINT
             if (self.beginPoint is None):
                 self.beginPoint = odom.pose
+                self.linearDistanceSquared = self.linearDistance**2
+                self.beginQuaternion = (self.beginPoint.pose.orientation.x, self.beginPoint.pose.orientation.y,
+                                        self.beginPoint.pose.orientation.z, self.beginPoint.pose.orientation.w)
+                self.beginEuler = tf.transformations.euler_from_quaternion(self.beginQuaternion)
+                self.beginPoseX = self.beginPoint.pose.position.x
+                self.beginPoseY = self.beginPoint.pose.position.y
             #
-
 
             # COMPUTE LINEAR DISTANCE
-            linearTraveled = math.sqrt(
-                math.pow((self.beginPoint.pose.position.x - odom.pose.pose.position.x), 2) + math.pow(
-                    (self.beginPoint.pose.position.y - odom.pose.pose.position.y
-                    ), 2))
+            linearTraveledSquared = (self.beginPoseX - odom.pose.pose.position.x)**2 + \
+                                    ((self.beginPoseY - odom.pose.pose.position.y)**2)
             #
-            if linearTraveled >= self.linearDistance:
+            if linearTraveledSquared >= self.linearDistanceSquared:
                 self.linearDistanceAlert = True
 
             # COMPUTE ANGULAR DISTANCE
-            Q1 = (
-                self.beginPoint.pose.orientation.x, self.beginPoint.pose.orientation.y, self.beginPoint.pose.orientation.z,
-                self.beginPoint.pose.orientation.w)
-            Q2 = (odom.pose.pose.orientation.x, odom.pose.pose.orientation.y, odom.pose.pose.orientation.z,
-                  odom.pose.pose.orientation.w)
+            Q2 = (odom.pose.pose.orientation.x, odom.pose.pose.orientation.y,
+                  odom.pose.pose.orientation.z, odom.pose.pose.orientation.w)
 
-            E1 = tf.transformations.euler_from_quaternion(Q1)
             E2 = tf.transformations.euler_from_quaternion(Q2)
 
             # TRANSFORM RANGE FROM [0,PI,-PI,0] TO [0,2PI]
-            Y1 = 2 * math.pi + E1[2] if E1[2] < 0 else E1[2]
+            Y1 = 2 * math.pi + self.beginEuler[2] if self.beginEuler[2] < 0 else self.beginEuler[2]
             Y2 = 2 * math.pi + E2[2] if E2[2] < 0 else E2[2]
             #
 
@@ -99,15 +106,16 @@ class Walker:
             #    rospy.logdebug("Walker: Calculated {} (Y1 = {}, Y2 = {}) angular distance traveled. target = {}"
             #                   .format(angularTraveled, Y1, Y2, self.angularDistance))
             #
-            Q3 = ( self.beginPoint.pose.orientation.x, self.beginPoint.pose.orientation.y, self.beginPoint.pose.orientation.z, self.beginPoint.pose.orientation.w )
-            rospy.sleep(0.2)
-            rospy.logdebug("Walker: Calculated {} (Y1 = {}, Y2 = {}) angular distance traveled. target = {}. Begin point = {}"
-                           .format(angularTraveled, Y1, Y2, self.angularDistance, tf.transformations.euler_from_quaternion(Q3)))
+            if (angularTraveled > self.prevAngularTraveled + 0.05):
+                rospy.logdebug(
+                    "Walker: Calculated {} (Y1 = {}, Y2 = {}) angular distance traveled. target = {}. Begin point = {}"
+                    .format(angularTraveled, Y1, Y2, self.angularDistance, self.beginEuler))
+
             if angularTraveled >= self.angularDistance:
                 rospy.loginfo("Walker: setting angular distance alert True")
                 self.angularDistanceAlert = True
 
-    def moveAngular(self, distance, ignoreCollisionAlert=False):
+    def moveAngular(self, distance, ignoreCollisionAlert=False, angularSpeed = 0.3):
         '''global self.odomCheck
         global angularDistance
         global self.angularDistanceAlert
@@ -129,7 +137,7 @@ class Walker:
             if (self.collisionAlert and not ignoreCollisionAlert):
                 rospy.logdebug("Walker: Collision Alert. Breaking angular movement")
                 break
-            walkTwist.angular.z = 0.3 * math.pi
+            walkTwist.angular.z = 0.1 * math.pi
             walkPub.publish(walkTwist)
             rate.sleep()
 
